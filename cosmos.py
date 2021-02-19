@@ -296,7 +296,9 @@ class VideoImage:
         else:
             retval, self.rvec, self.tvec = cv2.solvePnP(xyz, self.gcp_uv, self.mtx,  self.dist)
         self.camera_rot = cv2.Rodrigues(self.rvec)[0]
-        self.camera_position = -self.camera_rot.T @ self.tvec
+        camera_position = -self.camera_rot.T @ self.tvec
+        self.camera_position = self.roi.xyz2XYZ(camera_position.T)
+        
         Rt = self.camera_rot
         Rt[:,2] = Rt[:,2] * self.z_plane + self.tvec.flatten()
         self.H = self.mtx @ Rt
