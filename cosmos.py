@@ -85,10 +85,13 @@ class VideoImage:
     original_images_dir = 'D:/Documentos/Modelos/Rectify/tutorial/Exercise/ExtParDefinition/GCP_08Out2010/'
     images_filename_extension = 'jpg'
     images = ''
-    image_extensions = ('png', 'jpg', 'jpeg')
+    image_extensions = ('png', 'jpg', 'jpeg', 'tif')
     video_extensions = ('3gp', 'avi')
     
     image_display = True
+    
+    homography_matrix_filename = []
+    hm_method = 'from_gcp'
     
     
     undistort_images_dir = 'D:/Documentos/Modelos/Rectify/'
@@ -177,15 +180,20 @@ class VideoImage:
 
 
               
-    def rectify_images(self):
+    def rectify_images(self, method = 'from_gcp'):
          #self.mtx = self.newcameramtx.copy()
-         if not self.H.size:
+         if self.hm_method == 'from_gcp':
+             self.mtx = self.newcameramtx
              self.dist = np.zeros((1,5))
              self.compute_camera_matrices()
+         elif self.hm_method == 'from_homograpy matrix':
+             H = np.fromfile(self.homography_matrix_filename)
+             self.H = H.reshape((3,3))
+         if not self.H.size:
+             sys.exit('Empty Homography Matriz - cannot rectify images')
          self.read_images(self.undistort_images_dir)
          Path(self.rectified_images_dir).mkdir(parents=True, exist_ok=True)
          for fname in self.images:
-      
              print(fname)
              if fname.lower().endswith(self.image_extensions):
                 img = cv2.imread(fname)
