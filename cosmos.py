@@ -64,6 +64,12 @@ class ROI:
         atm[1,2] = self.yori
         if Path(filename).suffix =='.jpg':
             file = filename.replace('.jpg', '.jpw')
+        elif Path(filename).suffix =='.jpeg': 
+            file = filename.replace('.jpeg', '.jpw')
+        elif Path(filename).suffix =='.tif': 
+            file = filename.replace('.tif', '.tfw')
+        elif Path(filename).suffix =='.png': 
+            file = filename.replace('.png', '.pngw')
         else:
             sys.exit("Unknow file type")
         np.savetxt(file, atm.T.flatten())
