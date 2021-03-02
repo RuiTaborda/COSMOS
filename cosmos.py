@@ -25,7 +25,10 @@ class ROI:
     dx_map = 600
     dy_map = 300
     
-    def __init__(self, **kwargs):
+    def __init__(self, *initial_data,  **kwargs):
+        for dictionary in initial_data:
+            for key in dictionary:
+                setattr(self, key, dictionary[key])
         for key, value in kwargs.items():
             setattr(self, key, value)
         self.dx = int(self.dx_map / self.pixel_size)
@@ -38,7 +41,7 @@ class ROI:
         xy1 = np.hstack([xyz[:,:2], ones])
         atm = self.affine_trans_mat()
         XYZ = atm.dot(xy1.T).T
-        XYZ = np.hstack([XYZ, z])
+        XYZ = np.hstack([XYZ, z * self.pixel_size])
         XYZ[:,0] = XYZ[:,0] + self.xori
         XYZ[:,1] = XYZ[:,1] + self.yori
         return XYZ
@@ -51,6 +54,7 @@ class ROI:
         ones = np.ones(shape=(len(XYZ), 1))
         XY1 = np.hstack([XYZ[:,:2], ones])
         rot_mat = cv2.getRotationMatrix2D((0, 0), self.rotation, 1 / self.pixel_size)
+
         xyz = rot_mat.dot(XY1.T).T
         xyz = np.hstack([xyz, Z])
         return xyz
@@ -91,7 +95,7 @@ class VideoImage:
     image_display = True
     
     homography_matrix_filename = []
-    hm_method = 'from_gcp'
+    rectification_method = 'from_gcp'
     
     
     undistort_images_dir = 'D:/Documentos/Modelos/Rectify/'
@@ -181,14 +185,16 @@ class VideoImage:
 
               
     def rectify_images(self, method = 'from_gcp'):
-         #self.mtx = self.newcameramtx.copy()
-         if self.hm_method == 'from_gcp':
-             self.mtx = self.newcameramtx
+         if self.rectification_method == 'from_gcp':
+             self.read_camera()
              self.dist = np.zeros((1,5))
              self.compute_camera_matrices()
-         elif self.hm_method == 'from_homograpy matrix':
-             H = np.fromfile(self.homography_matrix_filename)
-             self.H = H.reshape((3,3))
+         elif self.rectification_method == 'from_parameter_file':
+             parameters = np.load(self.rectification_parameter_file, allow_pickle=True)
+             self.H = parameters['H']
+             self.z_plane = parameters['z_plane']
+             self.roi = ROI(parameters['roi'].all())
+             
          if not self.H.size:
              sys.exit('Empty Homography Matriz - cannot rectify images')
          self.read_images(self.undistort_images_dir)
@@ -300,10 +306,13 @@ class VideoImage:
         self.camera_position = self.roi.xyz2XYZ(camera_position.T)
         
         Rt = self.camera_rot
-        Rt[:,2] = Rt[:,2] * self.z_plane + self.tvec.flatten()
+        Rt[:,2] = Rt[:,2] * self.z_plane / self.roi.pixel_size + self.tvec.flatten()
         self.H = self.mtx @ Rt
         self.H = self.H / self.H[2,2]
         
+    def save_rectification_parameter_file(self, filename = 'rectification_parameters'):
+        np.savez(filename, H = self.H, z_plane = self.z_plane, roi = self.roi.__dict__)
+    
     def gcp_reprojection_error(self):
         #error in pixels
         dif = self.gcp_uv - self.XYZ2uv(self.gcp_XYZ)
@@ -315,13 +324,14 @@ class VideoImage:
         self.gcp_uv=gcp[['u', 'v']].values.astype('float64')
 
     def read_camera(self):
+        self.mtx = np.zeros((3,3))
         xmldoc = minidom.parse(self.camera_file)
         itemlist = xmldoc.getElementsByTagName('Cameras')
         camera_par = itemlist[0].getElementsByTagName(self.camera)
         fx = camera_par[0].getElementsByTagName('fx')
-        self.mtx[0, 0] = fx[0].firstChild.data
+        self.mtx[0, 0] = fx[0].firstChild.data 
         fy = camera_par[0].getElementsByTagName('fy')
-        self.mtx[1, 1] = fy[0].firstChild.data
+        self.mtx[1, 1] = fy[0].firstChild.data 
         cx = camera_par[0].getElementsByTagName('cx')
         self.mtx[0, 2] = cx[0].firstChild.data
         cy = camera_par[0].getElementsByTagName('cy')
