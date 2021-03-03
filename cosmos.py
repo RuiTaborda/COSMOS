@@ -285,10 +285,17 @@ class VideoImage:
         XYZ = self.roi.xyz2XYZ(xyz)
         return XYZ
    
-    def XYZ2uv(self, points):
+    def XY2uv(self, points):
         points = self.roi.XYZ2xyz(points)
         points = points[:,:2]
         uv = cv2.perspectiveTransform(np.array([points]), self.H)[0]
+        return uv
+    
+    def XYZ2uv(self, points):
+        points = self.roi.XYZ2xyz(points)
+        (uv, jacobian) = cv2.projectPoints(points, self.rvec, self.tvec, self.mtx, self.dist)
+        npoints = points.shape[0]
+        uv = uv.reshape(npoints, 2)
         return uv
             
     def undistort(self, img):
@@ -321,8 +328,9 @@ class VideoImage:
     
     def gcp_reprojection_error(self):
         #error in pixels
-        dif = self.gcp_uv - self.XYZ2uv(self.gcp_XYZ)
-        return np.linalg.norm(dif, axis=1)
+        uv = self.XYZ2uv(self.gcp_XYZ)
+        dif = self.gcp_uv -uv
+        return dif
     
     def read_gcp(self):
         gcp = pd.read_excel(self.gcp_excel_file)
