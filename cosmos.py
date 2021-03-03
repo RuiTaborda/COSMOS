@@ -89,8 +89,8 @@ class VideoImage:
     
     gcp_XYZ = []
     gcp_uv = []
-    H = np.array([]) # homography matrix
-    z_plane = 5
+    H = np.array([]) 
+    z_plane = 0
 
     original_images_dir = 'D:/Documentos/Modelos/Rectify/tutorial/Exercise/ExtParDefinition/GCP_08Out2010/'
     images_filename_extension = 'jpg'
@@ -98,9 +98,8 @@ class VideoImage:
     image_extensions = ('png', 'jpg', 'jpeg', 'tif')
     video_extensions = ('3gp', 'avi')
     
-    image_display = True
+    image_display = False
     
-    homography_matrix_filename = []
     rectification_method = 'from_gcp'
     
     
