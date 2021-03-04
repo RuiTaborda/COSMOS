@@ -155,10 +155,6 @@ class VideoImage:
                         print("Problem written " + img_name) #
            
             # Undistort videos
-            
-
-            
-            
             elif fname.lower().endswith(self.video_extensions):
                 print(fname)
                 container = av.open(fname)
@@ -205,7 +201,6 @@ class VideoImage:
          self.read_images(self.undistort_images_dir)
          Path(self.rectified_images_dir).mkdir(parents=True, exist_ok=True)
          for fname in self.images:
-             print(fname)
              if fname.lower().endswith(self.image_extensions):
                 img = cv2.imread(fname)
                 dst = self.warp_image(img)
