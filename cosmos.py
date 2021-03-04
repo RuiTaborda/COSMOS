@@ -3,9 +3,10 @@
 Created on Thu Mar 28 16:38:27 2019
 
 @author: rui taborda
-# https://ciencias.ulisboa.pt/pt/perfil/rtaborda
 
 """
+#v1.01
+
 
 import cv2
 import numpy as np
