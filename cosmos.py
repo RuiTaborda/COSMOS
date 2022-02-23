@@ -51,13 +51,21 @@ class ROI:
         XYZ = points.copy()
         XYZ[:,0] = XYZ[:,0] - self.xori
         XYZ[:,1] = XYZ[:,1] - self.yori
-        Z = np.c_[XYZ[:,2]] / self.pixel_size
         ones = np.ones(shape=(len(XYZ), 1))
+        
+        
+        if XYZ.shape[1] == 3:
+            Z = np.c_[XYZ[:,2]] / self.pixel_size
+        else:
+            Z = np.zeros(np.shape(ones))
+            
         XY1 = np.hstack([XYZ[:,:2], ones])
         rot_mat = cv2.getRotationMatrix2D((0, 0), self.rotation, 1 / self.pixel_size)
 
         xyz = rot_mat.dot(XY1.T).T
-        xyz = np.hstack([xyz, Z])
+                
+        if XYZ.shape[1] == 3:
+            xyz = np.hstack([xyz, Z])
         return xyz
     
     def affine_trans_mat(self):  #from global XYZ to local coordinates xyz 
@@ -99,8 +107,11 @@ class VideoImage:
     image_extensions = ('png', 'jpg', 'jpeg', 'tif')
     video_extensions = ('3gp', 'avi')
     
-    image_display = False
+    frame_echo = True
+    frame_echo_step = 100
+    vertical_flip = False
     
+    image_display = False
     rectification_method = 'from_gcp'
     
     
@@ -124,6 +135,9 @@ class VideoImage:
     dist = np.zeros((1,5))
     newcameramtx = np.zeros((3,3))
     mtx = np.zeros((3,3))
+    
+    
+    product_image_dir = ''
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -161,10 +175,11 @@ class VideoImage:
                 container = av.open(fname)
 
                 for frame in container.decode(video=0):
-                    if frame.index % 100 == 0:
+                    if self.frame_echo and not frame.index % self.frame_echo_step:
                         print("processed frame index {}".format(frame.index))
 
-                    img = cv2.cvtColor(np.array(frame.to_image()), cv2.COLOR_RGB2BGR)
+                    img = np.array(frame.to_image(), dtype = np.uint8)
+                    img = img[:,:,::-1]
                     dst = self.undistort(img)
                     if frame.index == 0:
                         h,  w = dst.shape[:2]
@@ -199,12 +214,16 @@ class VideoImage:
              
          if not self.H.size:
              sys.exit('Empty Homography Matriz - cannot rectify images')
+             
          self.read_images(self.undistort_images_dir)
          Path(self.rectified_images_dir).mkdir(parents=True, exist_ok=True)
          for fname in self.images:
              if fname.lower().endswith(self.image_extensions):
                 img = cv2.imread(fname)
                 dst = self.warp_image(img)
+                
+                if self.vertical_flip:
+                    dst = cv2.flip(dst, 0)
                 basename = os.path.basename(fname)
                 img_name = self.rectified_images_dir + basename
                 writeStatus = cv2.imwrite(img_name, dst)
@@ -223,10 +242,13 @@ class VideoImage:
 
                     for frame in container.decode(video=0):
  
-                        img = cv2.cvtColor(np.array(frame.to_image()), cv2.COLOR_RGB2BGR)
+                        img = np.array(frame.to_image(), dtype = np.uint8)
+                        img = img[:,:,::-1]
                         dst = self.warp_image(img)
-                        
-                        if frame.index % 100 == 0:
+                       
+                        if self.vertical_flip:
+                            dst = cv2.flip(dst, 0)
+                        if self.frame_echo and not frame.index % self.frame_echo_step:
                             print("processed frame index {}".format(frame.index))
                                
                             if self.image_display:
@@ -240,6 +262,7 @@ class VideoImage:
                             basename = os.path.splitext(os.path.basename(fname))[0] + '.avi'
                             vid_name = self.rectified_images_dir + basename
                             out = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc('M','J','P','G'), 2, (w,h))
+                       
                         out.write(dst)
                     out.release()
    
@@ -332,6 +355,7 @@ class VideoImage:
         self.gcp_XYZ=gcp[['X', 'Y', 'Z']].values.astype('float64')
         self.gcp_uv=gcp[['u', 'v']].values.astype('float64')
 
+
     def read_camera(self):
         self.mtx = np.zeros((3,3))
         xmldoc = minidom.parse(self.camera_file)
@@ -357,4 +381,54 @@ class VideoImage:
         k5 = camera_par[0].getElementsByTagName('k5')
         self.dist[0, 4] = k5[0].firstChild.data
         
-	
+    def compute_image_products(self, read_image_dir = False, write_image_dir = False, timex = True, var = True, perc = False):
+        if not read_image_dir:
+            self.read_images(self.original_images_dir)
+        else:
+            self.read_images(read_image_dir)
+        
+        if not write_image_dir:
+            write_image_dir = self.product_image_dir
+            
+        Path(write_image_dir).mkdir(parents = True, exist_ok = True)
+
+        images = []
+        for fname in self.images:
+            print(fname)
+            if fname.lower().endswith(self.image_extensions):
+                img = cv2.imread(fname)
+                images.append(img)
+
+            elif fname.lower().endswith(self.video_extensions):
+                container = av.open(fname)
+                images_video_list = []
+                for frame in container.decode(video=0):
+                    if self.frame_echo and not frame.index % self.frame_echo_step:
+                        print("processed frame index {}".format(frame.index))
+                
+                    img = np.array(frame.to_image(), dtype = np.uint8)
+                    images_video_list.append(img)
+                self.compute_image_products_from_image_list(images_video_list, fname, write_image_dir, timex, var, perc)            
+
+
+
+        if len(images):
+            
+            self.compute_image_products_from_image_list(images, fname, write_image_dir, timex , var, perc)            
+
+                 
+    def compute_image_products_from_image_list(self, images, fname, write_image_dir, timex , var, perc):
+            images = np.stack(images, axis=0)
+            
+            basename = os.path.splitext(os.path.basename(fname))[0] + '.png'
+            
+            if timex:
+                timex_img = np.mean(images, axis=0).astype(np.uint8) 
+                
+                img_name = write_image_dir + 'tx' + basename
+                print(img_name)
+                
+                cv2.imwrite(img_name, timex_img[...,::-1])
+                    
+        
+ 
